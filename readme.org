@@ -1,0 +1,84 @@
+* QA 2016-4-19
+** mnesia的脏操作究竟是指无锁还是只无同步?
+-> Mnesia用户手册35页.
+
+作为参数“fun”传递给函数 mnesia:async_dirty(Fun [, Args])的函数将在脏(dirty)上下文里执行。 这个函数调用将被映射到对应的脏函数。仍将涉及到日志、复制和预订但不涉及锁、本地事务存
+储或提交协议。检查点保持器(Checkpoint retainers)将被更新,但将是“脏”的,即更新是异 步的。此函数将在一个节点上等待操作被执行而不管其它节点,如果表在本地则不会出现等待。
+作为参数“fun”传递给函数 mnesia:sync_dirty(Fun [, Args])的函数将在与函数 mnesia:async_dirty(Fun[, Args])几乎相同的上下文里执行。不同的是操作被同步执行,调用者将等待全部激活的副本更新
+完成。同步脏操作(sync_dirty)对需要在多个节点上执行并且需要在派生远端进程或发送消息 给远端进程之前确认远程节点的更新已被执行的应用以及由于频繁执行和大量更新可能导致其它
+节点的 Mnesia 过载的应用非常有用。
+
+** Ets表是否可以跨节点访问? ets:lookup(远程节点的有名表, xx)。
+
+a 节点--->
+erl -name "a@127.0.0.1" -cookie=abc
+ets:new(test,[public,named_table]).
+ets:insert(test, {a,b}).
+ets:lookup(test, a).
+
+b 节点--->
+erl -name "b@127.0.0.1" -cookie=abc
+rpc:call('a@127.0.0.1', erlang, now, []).
+ets:lookup(test, a).
+
+** Dets在64位上2G内存是否存在。
+
+{ok, F} = dets:open_file(test,[{type,set},{auto_save,10}]),
+Item = lists:duplicate(10000,"abc"),
+[dets:insert(F,{{seq,A},Item}) || A <- lists:seq(1,10000000)]
+
+写到2G就写不进去了。
+
+** Mnesia是否有2G内存限制disk-copy.
+
+http://stackoverflow.com/questions/23180484/why-big-companies-use-mnesia-instead-of-using-riak-or-couchdb
+
+推测，内存没有限制，disk-copy有，证明:
+a--->
+erl -name "a@127.0.0.1" -cookie=abc
+mnesia:create_schema([node()]).
+mnesia:start().
+mt:create_disk().
+
+-rw-r--r--  1   staff         154  4 20 11:19 DECISION_TAB.LOG
+-rw-r--r--  1   staff          90  4 20 11:19 LATEST.LOG
+-rw-r--r--  1   staff        7323  4 20 11:09 schema.DAT
+-rw-r--r--  1   staff   802573939  4 20 11:13 test.DCD
+-rw-r--r--  1   staff  4129974631  4 20 11:16 test.DCL
+-rw-r--r--  1   staff  1140702878  4 20 11:23 test.TMP
+
+硬盘大小已经超过2G，目测没有2G限制.
+
+** Mnesia跨节点通信的性能差异。
+
+同一节点:
+
+insert 232 849
+read 565 909
+
+跨节点:
+a--->
+erl -name "a@127.0.0.1" -cookie=abc
+mnesia:start().
+mt:create().
+
+b--->
+erl -name "b@127.0.0.1" -cookie=abc
+mnesia:start().
+mnesia:change_config(extra_db_nodes, ['a@127.0.0.1']).
+
+mt:report().
+
+insert 17 671 757 / 232849 ->  75.89363493079206
+read 14 386 855/ 565909  -> 25.42255910402556
+
+跨网络:
+
+➜  ~ ping 192.168.1.1
+PING 192.168.1.1 (192.168.1.1): 56 data bytes
+64 bytes from 192.168.1.1: icmp_seq=0 ttl=64 time=2.578 ms
+64 bytes from 192.168.1.1: icmp_seq=1 ttl=64 time=2.338 ms
+64 bytes from 192.168.1.1: icmp_seq=5 ttl=64 time=3.640 ms
+
+2000 * 200000
+400000000000 / 232849 -> 1717.8514831500243
