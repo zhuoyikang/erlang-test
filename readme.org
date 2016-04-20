@@ -29,9 +29,15 @@ Item = lists:duplicate(10000,"abc"),
 
 写到2G就写不进去了。
 
+-> staff  2097337518  4 20 11:49 test
+
 ** Mnesia是否有2G内存限制disk-copy.
 
 http://stackoverflow.com/questions/23180484/why-big-companies-use-mnesia-instead-of-using-riak-or-couchdb
+
+http://stackoverflow.com/questions/421501/what-is-the-storage-capacity-of-a-mnesia-database
+
+http://erlang.org/faq/mnesia.html -> mnesia disk-copy 4G限制.
 
 推测，内存没有限制，disk-copy有，证明:
 a--->
@@ -48,6 +54,7 @@ mt:create_disk().
 -rw-r--r--  1   staff  1140702878  4 20 11:23 test.TMP
 
 硬盘大小已经超过2G，目测没有2G限制.
+
 
 ** Mnesia跨节点通信的性能差异。
 
