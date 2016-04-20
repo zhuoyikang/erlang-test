@@ -7,8 +7,10 @@
 ** mnesia的脏操作究竟是指无锁还是只无同步?
 -> Mnesia用户手册35页.
 
+
 作为参数“fun”传递给函数 mnesia:async_dirty(Fun [, Args])的函数将在脏(dirty)上下文里执行。 这个函数调用将被映射到对应的脏函数。仍将涉及到日志、复制和预订但不涉及锁、本地事务存
 储或提交协议。检查点保持器(Checkpoint retainers)将被更新,但将是“脏”的,即更新是异 步的。此函数将在一个节点上等待操作被执行而不管其它节点,如果表在本地则不会出现等待。
+
 作为参数“fun”传递给函数 mnesia:sync_dirty(Fun [, Args])的函数将在与函数 mnesia:async_dirty(Fun[, Args])几乎相同的上下文里执行。不同的是操作被同步执行,调用者将等待全部激活的副本更新
 完成。同步脏操作(sync_dirty)对需要在多个节点上执行并且需要在派生远端进程或发送消息 给远端进程之前确认远程节点的更新已被执行的应用以及由于频繁执行和大量更新可能导致其它
 节点的 Mnesia 过载的应用非常有用。
@@ -62,29 +64,59 @@ http://stackoverflow.com/questions/421501/what-is-the-storage-capacity-of-a-mnes
 
 http://erlang.org/faq/mnesia.html -> mnesia disk-copy 4G限制.
 
+
+11.5  How much data can be stored in Mnesia?
+
+Dets uses 32 bit integers for file offsets, so the largest possible mnesia table (for now) is 4Gb.
+
+In practice your machine will slow to a crawl way before you reach this limit.
+
+
 推测，内存没有限制，disk-copy有，证明:
 
 
 #+BEGIN_SRC erlang
-a--->
 
 erl -name "a@127.0.0.1" -cookie=abc
 mnesia:create_schema([node()]).
 mnesia:start().
 mt:create_disk().
 
--rw-r--r--  1   staff         154  4 20 11:19 DECISION_TAB.LOG
--rw-r--r--  1   staff          90  4 20 11:19 LATEST.LOG
--rw-r--r--  1   staff        7323  4 20 11:09 schema.DAT
--rw-r--r--  1   staff   802573939  4 20 11:13 test.DCD
--rw-r--r--  1   staff  4129974631  4 20 11:16 test.DCL
--rw-r--r--  1   staff  1140702878  4 20 11:23 test.TMP
-
-硬盘大小已经超过2G，目测没有2G限制.
-
-
 #+END_SRC
 
+写入到以下情况是进程直接被KILL了。
+
+#+BEGIN_SRC erlang
+-rw-r--r--  1   staff         154  4 20 12:31 DECISION_TAB.LOG
+-rw-r--r--  1   staff  5008495024  4 20 12:29 LATEST.LOG
+-rw-r--r--  1   staff    60113090  4 20 12:19 PREVIOUS.LOG
+-rw-r--r--  1   staff        6752  4 20 12:18 schema.DAT
+-rw-r--r--  1   staff   328582463  4 20 12:19 test.DCD
+-rw-r--r--  1   staff   480546619  4 20 12:19 test.DCL
+-rw-r--r--  1   staff  1741072485  4 20 12:29 test.TMP
+
+[1]    79546 killed     erl -name "a@127.0.0.1" -cookie=abc
+#+END_SRC
+
+尝试重启节点。
+
+#+BEGIN_SRC erlang
+erl -name "a@127.0.0.1" -cookie=abc
+mnesia:start().
+
+数据超过5G:
+
+-rw-r--r--  1 zhuoyikang  staff         154  4 20 12:33 DECISION_TAB.LOG
+-rw-r--r--  1 zhuoyikang  staff          90  4 20 12:33 LATEST.LOG
+-rw-r--r--  1 zhuoyikang  staff        6752  4 20 12:18 schema.DAT
+-rw-r--r--  1 zhuoyikang  staff   328582463  4 20 12:19 test.DCD
+-rw-r--r--  1 zhuoyikang  staff  5544770017  4 20 12:33 test.DCL
+
+一切正常
+#+END_SRC
+
+
+启动后又莫名其妙被kill.电脑已经卡爆，需要到更好的机器上去测试.
 
 ** Mnesia跨节点通信的性能差异。
 
