@@ -1,4 +1,9 @@
 * QA 2016-4-19
+
+#+BEGIN_SRC erlang
+#+END_SRC
+
+
 ** mnesia的脏操作究竟是指无锁还是只无同步?
 -> Mnesia用户手册35页.
 
@@ -9,23 +14,41 @@
 节点的 Mnesia 过载的应用非常有用。
 
 ** Ets表是否可以跨节点访问? ets:lookup(远程节点的有名表, xx)。
-
+ 
 a 节点--->
+
+
+#+BEGIN_SRC erlang
 erl -name "a@127.0.0.1" -cookie=abc
 ets:new(test,[public,named_table]).
 ets:insert(test, {a,b}).
 ets:lookup(test, a).
 
+#+END_SRC
+
+
+
 b 节点--->
+
+#+BEGIN_SRC erlang
 erl -name "b@127.0.0.1" -cookie=abc
 rpc:call('a@127.0.0.1', erlang, now, []).
 ets:lookup(test, a).
 
+#+END_SRC
+
+
+无法访问.
+
 ** Dets在64位上2G内存是否存在。
 
+#+BEGIN_SRC erlang
 {ok, F} = dets:open_file(test,[{type,set},{auto_save,10}]),
 Item = lists:duplicate(10000,"abc"),
 [dets:insert(F,{{seq,A},Item}) || A <- lists:seq(1,10000000)]
+
+#+END_SRC
+
 
 写到2G就写不进去了。
 
@@ -40,7 +63,11 @@ http://stackoverflow.com/questions/421501/what-is-the-storage-capacity-of-a-mnes
 http://erlang.org/faq/mnesia.html -> mnesia disk-copy 4G限制.
 
 推测，内存没有限制，disk-copy有，证明:
+
+
+#+BEGIN_SRC erlang
 a--->
+
 erl -name "a@127.0.0.1" -cookie=abc
 mnesia:create_schema([node()]).
 mnesia:start().
@@ -56,31 +83,44 @@ mt:create_disk().
 硬盘大小已经超过2G，目测没有2G限制.
 
 
+#+END_SRC
+
+
 ** Mnesia跨节点通信的性能差异。
 
 同一节点:
-
 insert 232 849
 read 565 909
 
 跨节点:
+
 a--->
+
+#+BEGIN_SRC erlang
 erl -name "a@127.0.0.1" -cookie=abc
 mnesia:start().
 mt:create().
+#+END_SRC
+
+
 
 b--->
+
+#+BEGIN_SRC erlang
 erl -name "b@127.0.0.1" -cookie=abc
 mnesia:start().
 mnesia:change_config(extra_db_nodes, ['a@127.0.0.1']).
-
 mt:report().
+#+END_SRC
+
+
 
 insert 17 671 757 / 232849 ->  75.89363493079206
 read 14 386 855/ 565909  -> 25.42255910402556
 
 跨网络:
 
+#+BEGIN_SRC erlang
 ➜  ~ ping 192.168.1.1
 PING 192.168.1.1 (192.168.1.1): 56 data bytes
 64 bytes from 192.168.1.1: icmp_seq=0 ttl=64 time=2.578 ms
@@ -89,3 +129,6 @@ PING 192.168.1.1 (192.168.1.1): 56 data bytes
 
 2000 * 200000
 400000000000 / 232849 -> 1717.8514831500243
+
+#+END_SRC
+
